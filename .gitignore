@@ -1,19 +1,27 @@
 # Python
 __pycache__/
 *.pyc
+*.pyo
 venv/
+.venv/
 
-# macOS
+# macOS / Windows
 .DS_Store
+Thumbs.db
 
 # Environment & secrets
 .env
+.env.*
+!.env.example
 
-# Local Claude Code settings (contains user-specific permissions)
+# Local editor / Copilot / agent settings
+.vscode/
+.copilot/
 .claude/settings.local.json
 
 # Generated assessment reports
 EKS-Upgrade-Assessment-*
+EKS-Upgrade-Assessment-*.html
 
 # Eval scenario output reports
 evals/outputs/
@@ -21,7 +29,11 @@ evals/outputs/
 # Testing
 .hypothesis/
 .pytest_cache/
+.coverage
+htmlcov/
 
-# Packaged DevOps Agent skill zips
-eks-upgrade-check-skill.zip
+# Packaged skill artifacts
+*.skill.zip
 *-skill.zip
+copilot-skill-*.zip
+eks-upgrade-check-skill.zip
