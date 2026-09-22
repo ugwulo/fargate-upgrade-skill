@@ -1,0 +1,70 @@
+{
+  "_comment": "Registry of platform controllers owned by this service. It contains identifiers and authoritative compatibility sources, not compatibility data. Verify every result live against the project's documentation.",
+  "_schema_version": "2.0",
+  "_usage": "Match workloads by app name, Helm chart, or container image. Consult compatibility_url first and releases_url second. If the source is unavailable or ambiguous, report UNKNOWN_VERIFIABLE; never guess.",
+  "addons": [
+    {
+      "name": "argocd",
+      "identifiers": {
+        "app_names": ["argocd", "argocd-server", "argocd-repo-server", "argocd-application-controller"],
+        "helm_charts": ["argo-cd", "argocd"],
+        "container_images": ["quay.io/argoproj/argocd", "ghcr.io/argoproj/argocd"]
+      },
+      "compatibility_url": "https://argo-cd.readthedocs.io/en/stable/operator-manual/tested-kubernetes-versions/",
+      "releases_url": "https://github.com/argoproj/argo-cd/releases"
+    },
+    {
+      "name": "aws-load-balancer-controller",
+      "identifiers": {
+        "app_names": ["aws-load-balancer-controller"],
+        "helm_charts": ["aws-load-balancer-controller"],
+        "container_images": ["public.ecr.aws/eks/aws-load-balancer-controller"]
+      },
+      "compatibility_url": "https://kubernetes-sigs.github.io/aws-load-balancer-controller/latest/deploy/installation/",
+      "releases_url": "https://github.com/kubernetes-sigs/aws-load-balancer-controller/releases",
+      "notes": "This controller supports Fargate, but Service and Ingress behavior must be checked against the installed version and target Kubernetes version."
+    },
+    {
+      "name": "external-secrets",
+      "identifiers": {
+        "app_names": ["external-secrets", "external-secrets-operator"],
+        "helm_charts": ["external-secrets"],
+        "container_images": ["ghcr.io/external-secrets/external-secrets", "oci.external-secrets.io/external-secrets/external-secrets"]
+      },
+      "compatibility_url": "https://external-secrets.io/latest/introduction/stability-support/",
+      "releases_url": "https://github.com/external-secrets/external-secrets/releases"
+    },
+    {
+      "name": "ack",
+      "identifiers": {
+        "app_names": ["ack", "ack-controller"],
+        "helm_charts": ["ack-chart"],
+        "container_images": ["public.ecr.aws/aws-controllers-k8s"]
+      },
+      "compatibility_url": "https://aws-controllers-k8s.github.io/community/docs/community/overview/",
+      "releases_url": "https://github.com/aws-controllers-k8s/community/releases",
+      "notes": "ACK is a family of service-specific controllers. Record the service controller name and verify its own release documentation when the generic ACK source is insufficient."
+    },
+    {
+      "name": "grafana-alloy-operator",
+      "identifiers": {
+        "app_names": ["grafana-operator", "alloy-operator", "grafana-alloy-operator"],
+        "helm_charts": ["grafana-operator", "alloy-operator"],
+        "container_images": ["quay.io/grafana/grafana-operator", "grafana/alloy"]
+      },
+      "compatibility_url": "https://grafana.com/docs/grafana-cloud/monitor-infrastructure/integrations/integration-reference/integration-grafana-operator/",
+      "releases_url": "https://github.com/grafana/grafana-operator/releases",
+      "notes": "Grafana Operator and Alloy Operator are separate projects. Preserve the detected project identity and consult the matching upstream release documentation."
+    },
+    {
+      "name": "keda",
+      "identifiers": {
+        "app_names": ["keda", "keda-operator"],
+        "helm_charts": ["keda"],
+        "container_images": ["ghcr.io/kedacore/keda"]
+      },
+      "compatibility_url": "https://keda.sh/docs/latest/operate/cluster/",
+      "releases_url": "https://github.com/kedacore/keda/releases"
+    }
+  ]
+}

@@ -1,0 +1,153 @@
+# Version Validation & Upgrade Path
+
+## Purpose
+Validate the upgrade path, determine support status, and enforce EKS upgrade rules.
+
+## EKS Version Support Calendar (fallback reference, as of June 2026)
+
+> **Freshness gate — apply BEFORE using this table:**
+> 1. If the cluster version or target version is **NOT in the table below** → fetch live
+>    data from AWS docs (`search_documentation` for "EKS Kubernetes versions") before proceeding.
+> 2. If today's assessment date is **past the "Standard Support Until" date** for the cluster's
+>    current version → that version has moved from STANDARD to EXTENDED support (extended-support
+>    pricing and an extended-support INFO finding now apply). The table's STANDARD/EXTENDED labels
+>    go stale the moment a standard-support window closes, so verify the row's Status live against
+>    AWS docs (EKS `kubernetes-versions.html`) before reporting.
+> 3. If today's assessment date is **past the "Extended Support Until" date** for the cluster's
+>    current version → that version's status may have changed to UNSUPPORTED. Verify live before
+>    reporting support status.
+> 4. If live lookup fails or the MCP server is unavailable → use the table as fallback, but add
+>    a note in the report: "Support status unverified — table data may be stale."
+
+| Version | Standard Support Until | Extended Support Until | Status |
+|---------|----------------------|----------------------|--------|
+| 1.36 | August 2, 2027 | August 2, 2028 | ✅ STANDARD (latest in this table) |
+| 1.35 | March 27, 2027 | March 27, 2028 | ✅ STANDARD |
+| 1.34 | December 2, 2026 | December 2, 2027 | ✅ STANDARD |
+| 1.33 | July 29, 2026 | July 29, 2027 | ⚠️ EXTENDED (standard support ended July 29, 2026; extended as of 2026-08-05 — verify live) |
+| 1.32 | March 23, 2026 | March 23, 2027 | ⚠️ EXTENDED |
+| 1.31 | November 26, 2025 | November 26, 2026 | ⚠️ EXTENDED |
+| 1.30 | July 23, 2025 | July 23, 2026 | ❌ UNSUPPORTED (extended support ended July 23, 2026; unsupported as of 2026-08-06 — verify live) |
+
+> **Provenance:** calendar verified as of 2026-08-06 via https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html — re-verify live per the freshness gate above before reporting.
+
+**CRITICAL:** The `upgradePolicy.supportType` field from the API is a CONFIGURATION PREFERENCE, not the current billing status. Always determine actual support status from the calendar above or from live AWS documentation.
+
+**Cost impact:** Extended support has historically cost ~$0.60/hr vs ~$0.10/hr for standard support. These rates are indicative and subject to change — verify against the current [Amazon EKS pricing page](https://aws.amazon.com/eks/pricing/) before quoting figures to the user.
+
+**Cost Calculation Formula (recompute with the current rates, do not hardcode):**
+```
+extra_cost_per_month = (extended_rate - standard_rate) × 730
+total_extended_cost  = extended_rate × 730
+total_standard_cost  = standard_rate × 730
+# Example with the indicative rates above:
+#   extra = (0.60 - 0.10) × 730 = ~$365/month per cluster
+#   total_extended = 0.60 × 730 = ~$438/month per cluster
+```
+Always use this formula. Do NOT round, estimate, or hallucinate cost figures.
+730 = average hours per month (365 days × 24 hours ÷ 12 months).
+
+## Checks to Execute
+
+### 1.0 — Target Version Existence (MUST run before other checks)
+
+**Why:** EKS releases versions incrementally. A target version that doesn't exist on EKS yet
+cannot be assessed. The arithmetic check (target - current == 1) is necessary but NOT sufficient.
+
+**How to check:**
+1. Confirm the target version exists in the calendar table above.
+2. If NOT in the table → search AWS docs (`search_documentation` for "EKS Kubernetes versions")
+   to confirm whether the version has been released on EKS.
+3. If live lookup also finds no evidence the version exists on EKS → **ABORT the assessment.**
+
+**If target version does not exist on EKS — STOP and report:**
+
+```
+## Assessment Cannot Proceed
+
+**Target version <target> is not yet available on Amazon EKS.**
+
+The latest supported EKS version is <latest_known>. Kubernetes <target> has not been
+released on EKS as of this assessment date (<date>).
+
+**What you can do:**
+- Assess upgrade readiness to <latest_known> instead (if your cluster is on <latest - 1>)
+- Monitor the EKS release calendar for <target> availability:
+  https://docs.aws.amazon.com/eks/latest/userguide/kubernetes-versions.html
+```
+
+Do NOT proceed with Steps 1-8. Do NOT produce a readiness score. End the assessment here.
+
+### 1.1 — Current Version & Support Status
+
+**How to check:**
+1. Describe the cluster → get `version` and `platformVersion`
+2. Match version against the calendar table above (applying the freshness gate)
+3. Determine the support status. Possible states:
+   - **STANDARD** — within standard support window
+   - **EXTENDED** — past standard support, within extended support window
+   - **UNSUPPORTED** — past extended support end date (see handling below)
+4. Report: version, support status, when current support period ends (or already ended)
+
+**UNSUPPORTED version handling:**
+
+If the cluster version's Extended Support Until date has passed:
+- Status = **UNSUPPORTED**
+- Severity = **CRITICAL**
+- Flag as a blocker in the report (see report-generation.md for template)
+- The cluster no longer receives security patches or bug fixes from AWS
+- AWS automatically upgrades the cluster to the next minor version at the end of extended support (see EKS docs, "extended support" / `kubernetes-versions.html`); the cluster does not remain on the unsupported version indefinitely
+- Extended support billing (indicative ~$0.60/hr — verify current rate) applies throughout the extended-support window; it ends when the cluster leaves the extended-support version — either by a user-initiated upgrade or by AWS's automatic upgrade at end of extended support
+- Score impact: 15 pts deduction (see report-generation.md §Category 10)
+
+**Output:** Current version, support tier, cost implications. If UNSUPPORTED, include urgency callout.
+
+### 1.2 — Upgrade Path Validation
+
+**Rules:**
+- EKS requires upgrading **one minor version at a time** (e.g., 1.30 → 1.31, not 1.30 → 1.32)
+- A downgrade is not an assessment target for this forward-path logic — but reverting is not
+  impossible: EKS Version Rollback (launched 2026-07) can revert the control plane to the
+  previous minor version within **7 days** of an in-place upgrade, a single version only
+  (N→N-1), via console/CLI/SDK (`aws eks update-cluster-version` with the N-1 version → update
+  type `VersionRollback`), gated by `ROLLBACK_READINESS` cluster insights.
+- Same-version "upgrades" are invalid
+
+**How to check:**
+1. Parse current version (from cluster describe) and target version (from user input)
+2. Calculate version difference: `target_minor - current_minor`
+3. If difference == 1: valid direct upgrade
+4. If difference > 1: show required upgrade path (e.g., 1.29 → 1.30 → 1.31 → 1.32)
+5. If difference <= 0: invalid (same version or downgrade)
+
+**Output:** Valid/invalid path, required intermediate steps if multi-hop.
+
+### 1.3 — Fargate Version Boundary
+
+Fargate does not expose a customer-managed node-group upgrade path. AWS manages the
+Fargate kubelet, operating system, and container runtime. Therefore this skill does not
+calculate kubelet skew or recommend an AMI/runtime migration for a Fargate-only cluster.
+
+**How to check:**
+1. List Fargate profiles and describe each profile.
+2. List managed node groups only to detect a hybrid cluster.
+3. If no managed or self-managed node groups are present, mark node version readiness
+  `N/A` and continue with the Fargate profile, subnet, pod, and controller checks.
+4. If node groups are present, mark the cluster `HYBRID` and require a separately
+  approved EC2 node-readiness assessment before claiming full readiness.
+
+**Output:** Fargate profile status, selector coverage, profile subnets, and hybrid/N/A
+boundary. Never report an empty Fargate node list as a clean kubelet-skew result.
+
+## Score Impact
+
+> **Canonical scoring is defined in `steering/report-generation.md` §Category 3 (Node Readiness) and §Category 10 (Unsupported Version).**
+
+| Finding | Severity | Quick Reference |
+|---------|----------|-----------------|
+| On extended support | INFO | 0 pts |
+| Version UNSUPPORTED | CRITICAL | 15 pts (Category 10) |
+| Multi-hop upgrade needed | INFO | 0 pts |
+| Target version unreleased | N/A | Assessment aborted — no score |
+| Fargate-only node readiness | N/A | 0 pts; AWS manages the runtime |
+| Hybrid cluster with node groups | UNKNOWN | Requires separate EC2 node-readiness assessment |
